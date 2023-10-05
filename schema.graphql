@@ -1,0 +1,11 @@
+type DailyTx @entity {
+  id: ID!
+  txNum: Int!
+  date: DateTime! @index
+}
+
+type DailyActiveWallet @entity {
+  id: ID!
+  activeWallet: Int!
+  date: DateTime! @index
+}
