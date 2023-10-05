@@ -25,7 +25,6 @@ export const processor = new EvmBatchProcessor()
         from: 0,
     })
     .addTransaction({
-        to: ['0x0000000000000000000000000000000000000000'],
     })
 
 export type Fields = EvmBatchProcessorFields<typeof processor>

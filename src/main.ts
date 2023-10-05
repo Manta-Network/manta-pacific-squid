@@ -2,15 +2,15 @@ import {TypeormDatabase} from '@subsquid/typeorm-store'
 import {DailyTx} from './model'
 import {processor} from './processor'
 
-processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
-    let currDay: Date | undefined = undefined;
-    let endDay: Date | undefined = undefined;
-    let dailyTx = new DailyTx({
-        id: "0",
-        txNum: 0,
-        date: new Date(),
-    });
+let currDay: Date | undefined = undefined;
+let endDay: Date | undefined = undefined;
+let dailyTx = new DailyTx({
+    id: "0",
+    txNum: 0,
+    date: new Date(),
+});
 
+processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     for (let c of ctx.blocks) {
         const blockDate = new Date(c.header.timestamp);
         // init value for first loop
@@ -25,19 +25,18 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
                 endDay = val.date;
             }
         }
-        ctx.log.info(`squid curr: ${currDay} end ${endDay}`);
-        currDay.setDate(blockDate.getDate());
-        dailyTx.date.setDate(endDay.getDate());
+        currDay.setTime(blockDate.getTime());
+        dailyTx.date.setTime(endDay.getTime());
 
         for (let tx of c.transactions) {
-            dailyTx.txNum += 1;
+            dailyTx.txNum++;
         }
 
         if (currDay > endDay) {
             ctx.log.info(`new day started! previous day tx volume ${dailyTx.txNum}`);
             dailyTx.id = c.header.id;
             await ctx.store.upsert(dailyTx);
-            endDay.setDate(currDay.getDate() + 1);
+            endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
 
             // reset daily tx number to zero
             dailyTx.txNum = 0;
