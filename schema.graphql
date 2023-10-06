@@ -4,6 +4,12 @@ type DailyTx @entity {
   date: DateTime! @index
 }
 
+type HourlyTx @entity {
+  id: ID!
+  txNum: Int!
+  date: DateTime! @index
+}
+
 type DailyActiveWallet @entity {
   id: ID!
   activeWallet: Int!

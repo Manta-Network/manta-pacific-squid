@@ -1,14 +1,20 @@
 import {TypeormDatabase} from '@subsquid/typeorm-store'
-import {DailyTx} from './model'
+import {DailyTx, HourlyTx} from './model'
 import {processor} from './processor'
 
 let currDay: Date | undefined = undefined;
+let endHour: Date | undefined = undefined;
 let endDay: Date | undefined = undefined;
 let dailyTx = new DailyTx({
     id: "0",
     txNum: 0,
     date: new Date(),
 });
+let hourlyTx = new HourlyTx({
+    id: "0",
+    txNum: 0,
+    date: new Date(),
+})
 
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     for (let c of ctx.blocks) {
@@ -25,11 +31,24 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
                 endDay = val.date;
             }
         }
+        if (endHour === undefined) {
+            let val = await ctx.store.get(HourlyTx, {where: {id: "0"}})
+            if (val === undefined) {
+                endHour = new Date(blockDate.getTime() + (1000 * 60 * 60));
+            } else {
+                endHour = val.date;
+            }
+        }
+
         currDay.setTime(blockDate.getTime());
         dailyTx.date.setTime(endDay.getTime());
+        hourlyTx.date.setTime(endHour.getTime());
 
         for (let tx of c.transactions) {
+            // increment daily tx
             dailyTx.txNum++;
+            // increment hourly tx
+            hourlyTx.txNum++;
         }
 
         if (currDay > endDay) {
@@ -43,6 +62,19 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
         } else {
             dailyTx.id = "0";
             await ctx.store.upsert(dailyTx);
+        }
+
+        if (currDay > endHour) {
+            ctx.log.info(`new hour started! previous hour tx volume ${hourlyTx.txNum}`);
+            hourlyTx.id = c.header.id;
+            await ctx.store.upsert(hourlyTx);
+            endHour.setTime(endHour.getTime() + (1000 * 60 * 60));
+
+            // reset daily tx number to zero
+            hourlyTx.txNum = 0;
+        } else {
+            hourlyTx.id = "0";
+            await ctx.store.upsert(hourlyTx);
         }
     }
 })
