@@ -1,11 +1,11 @@
 manifestVersion: subsquid.io/v0.1
-name: manta-pacific-tx
+name: manta-pacific-squid
 version: 1
 description: 'The very first evm squid from manifest  '
-build: 
+build:
 deploy:
   addons:
-    postgres: 
+    postgres:
   processor:
     cmd:
       - node
