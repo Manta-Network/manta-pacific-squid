@@ -1,7 +1,7 @@
 manifestVersion: subsquid.io/v0.1
 name: manta-pacific-squid
 version: 1
-description: 'The very first evm squid from manifest  '
+description: 'Manta squid'
 build:
 deploy:
   addons:
@@ -14,11 +14,13 @@ deploy:
     cmd:
       - npx
       - squid-graphql-server
-      - '--dumb-cache'
-      - in-memory
-      - '--dumb-cache-ttl'
-      - '1000'
-      - '--dumb-cache-size'
-      - '100'
-      - '--dumb-cache-max-age'
-      - '1000'
+
+scale:
+  addons:
+     postgres:
+         storage: 20G
+         profile: medium
+  processor:
+     profile: medium
+  api:
+     profile: large
