@@ -14,13 +14,3 @@ deploy:
     cmd:
       - npx
       - squid-graphql-server
-
-scale:
-  addons:
-     postgres:
-         storage: 20G
-         profile: medium
-  processor:
-     profile: medium
-  api:
-     profile: large
