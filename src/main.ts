@@ -71,8 +71,16 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             await ctx.store.upsert([...walletSet.values()].map((x)=> {
                 return new CumulativeWallets({id: x})
             }));
+
+            // update most current data hourly
+            dailyActive.id = "0";
+            dailyActive.activeWallet = walletSet.size;
+            dailyActive.cumulativeUsers = await ctx.store.count(CumulativeWallets);
+
+            await ctx.store.upsert(dailyActive);
         } else {
             hourlyTx.id = "0";
+
             await ctx.store.upsert(hourlyTx);
         }
 
@@ -93,11 +101,7 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             walletSet.clear();
         } else {
             dailyTx.id = "0";
-            dailyActive.id = "0";
-            dailyActive.activeWallet = walletSet.size;
-            dailyActive.cumulativeUsers = await ctx.store.count(CumulativeWallets);
 
-            await ctx.store.upsert(dailyActive);
             await ctx.store.upsert(dailyTx);
         }
     }
