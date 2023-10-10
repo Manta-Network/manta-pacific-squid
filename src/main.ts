@@ -1,5 +1,5 @@
 import {TypeormDatabase} from '@subsquid/typeorm-store'
-import {DailyTx, HourlyTx, DailyActiveWallet} from './model'
+import {DailyTx, HourlyTx, DailyActiveWallet,  CumulativeWallets} from './model'
 import {processor} from './processor'
 
 let currDay: Date | undefined = undefined;
@@ -19,6 +19,7 @@ let dailyActive = new DailyActiveWallet({
     id: "0",
     activeWallet: 0,
     date: new Date(),
+    cumulativeUsers: 0,
 })
 let walletSet: Set<string> = new Set();
 
@@ -59,26 +60,6 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             walletSet.add(tx.from);
         }
 
-        if (currDay > endDay) {
-            ctx.log.info(`new day started! previous day tx volume ${dailyTx.txNum}`);
-            dailyTx.id = c.header.id;
-            dailyActive.id = c.header.id;
-            dailyActive.activeWallet = walletSet.size;
-
-            await ctx.store.upsert(dailyActive)
-            await ctx.store.upsert(dailyTx);
-            endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
-
-            // reset daily tx number to zero
-            dailyTx.txNum = 0;
-        } else {
-            dailyTx.id = "0";
-            dailyActive.id = "0";
-
-            await ctx.store.upsert(dailyActive);
-            await ctx.store.upsert(dailyTx);
-        }
-
         if (currDay > endHour) {
             ctx.log.info(`new hour started! previous hour tx volume ${hourlyTx.txNum}`);
             hourlyTx.id = c.header.id;
@@ -87,9 +68,35 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
 
             // reset daily tx number to zero
             hourlyTx.txNum = 0;
+            await ctx.store.upsert([...walletSet.values()].map((x)=> {
+                return new CumulativeWallets({id: x})
+            }));
         } else {
             hourlyTx.id = "0";
             await ctx.store.upsert(hourlyTx);
+        }
+
+        if (currDay > endDay) {
+            ctx.log.info(`new day started! previous day tx volume ${dailyTx.txNum}`);
+            dailyTx.id = c.header.id;
+            dailyActive.id = c.header.id;
+            dailyActive.activeWallet = walletSet.size;
+            dailyActive.cumulativeUsers = await ctx.store.count(CumulativeWallets);
+
+            await ctx.store.upsert(dailyActive)
+            await ctx.store.upsert(dailyTx);
+            endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
+
+            // reset daily tx number to zero
+            dailyTx.txNum = 0;
+            // reset daily users
+            walletSet.clear();
+        } else {
+            dailyTx.id = "0";
+            dailyActive.id = "0";
+
+            await ctx.store.upsert(dailyActive);
+            await ctx.store.upsert(dailyTx);
         }
     }
 })

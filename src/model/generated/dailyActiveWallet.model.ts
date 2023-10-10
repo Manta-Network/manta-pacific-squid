@@ -15,4 +15,7 @@ export class DailyActiveWallet {
     @Index_()
     @Column_("timestamp with time zone", {nullable: false})
     date!: Date
+
+    @Column_("int4", {nullable: false})
+    cumulativeUsers!: number
 }
