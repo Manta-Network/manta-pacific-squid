@@ -94,6 +94,8 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
         } else {
             dailyTx.id = "0";
             dailyActive.id = "0";
+            dailyActive.activeWallet = walletSet.size;
+            dailyActive.cumulativeUsers = await ctx.store.count(CumulativeWallets);
 
             await ctx.store.upsert(dailyActive);
             await ctx.store.upsert(dailyTx);
