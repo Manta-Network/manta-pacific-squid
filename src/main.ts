@@ -1,5 +1,5 @@
 import {TypeormDatabase} from '@subsquid/typeorm-store'
-import {DailyTx, HourlyTx} from './model'
+import {DailyTx, HourlyTx, DailyActiveWallet} from './model'
 import {processor} from './processor'
 
 let currDay: Date | undefined = undefined;
@@ -15,6 +15,12 @@ let hourlyTx = new HourlyTx({
     txNum: 0,
     date: new Date(),
 })
+let dailyActive = new DailyActiveWallet({
+    id: "0",
+    activeWallet: 0,
+    date: new Date(),
+})
+let walletSet: Set<string> = new Set();
 
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     for (let c of ctx.blocks) {
@@ -43,17 +49,23 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
         currDay.setTime(blockDate.getTime());
         dailyTx.date.setTime(endDay.getTime());
         hourlyTx.date.setTime(endHour.getTime());
+        dailyActive.date.setTime(endDay.getTime());
 
         for (let tx of c.transactions) {
             // increment daily tx
             dailyTx.txNum++;
             // increment hourly tx
             hourlyTx.txNum++;
+            walletSet.add(tx.from);
         }
 
         if (currDay > endDay) {
             ctx.log.info(`new day started! previous day tx volume ${dailyTx.txNum}`);
             dailyTx.id = c.header.id;
+            dailyActive.id = c.header.id;
+            dailyActive.activeWallet = walletSet.size;
+
+            await ctx.store.upsert(dailyActive)
             await ctx.store.upsert(dailyTx);
             endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
 
@@ -61,6 +73,9 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             dailyTx.txNum = 0;
         } else {
             dailyTx.id = "0";
+            dailyActive.id = "0";
+
+            await ctx.store.upsert(dailyActive);
             await ctx.store.upsert(dailyTx);
         }
 

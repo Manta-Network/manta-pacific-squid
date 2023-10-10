@@ -15,3 +15,8 @@ type DailyActiveWallet @entity {
   activeWallet: Int!
   date: DateTime! @index
 }
+
+type CumulativeWallets @ entity {
+  id: ID!
+  wallet: String!
+}
