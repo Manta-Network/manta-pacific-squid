@@ -1,29 +1,17 @@
-import {TypeormDatabase} from '@subsquid/typeorm-store'
+import { DataHandlerContext } from '@subsquid/evm-processor';
+import {Store, TypeormDatabase} from '@subsquid/typeorm-store'
 import {DailyTx, HourlyTx, DailyActiveWallet,  CumulativeWallets} from './model'
 import {processor} from './processor'
 
 let currDay: Date | undefined = undefined;
 let endHour: Date | undefined = undefined;
 let endDay: Date | undefined = undefined;
-let dailyTx = new DailyTx({
-    id: "0",
-    txNum: 0,
-    date: new Date(),
-});
-let hourlyTx = new HourlyTx({
-    id: "0",
-    txNum: 0,
-    date: new Date(),
-})
-let dailyActive = new DailyActiveWallet({
-    id: "0",
-    activeWallet: 0,
-    date: new Date(),
-    cumulativeUsers: 0,
-})
 let walletSet: Set<string> = new Set();
 
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
+    // load current values from db
+    const [dailyTx, hourlyTx, dailyActive]  = await init_values(ctx);
+
     for (let c of ctx.blocks) {
         const blockDate = new Date(c.header.timestamp);
         // init value for first loop
@@ -106,3 +94,37 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
         }
     }
 })
+
+async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyTx, HourlyTx, DailyActiveWallet]> {
+    let initDailyTx = await ctx.store.get(DailyTx, {where: {id: "0"}});
+    let initHourlyTx = await ctx.store.get(HourlyTx, {where: {id: "0"}});
+    let initDailyActive = await ctx.store.get(DailyActiveWallet, {where: {id: "0"}});
+
+    ctx.log.info(``)
+
+    if (initDailyTx === undefined) {
+        initDailyTx = new DailyTx({
+            id: "0",
+            txNum: 0,
+            date: new Date(),
+        });
+    }
+
+    if (initHourlyTx === undefined) {
+        initHourlyTx = new HourlyTx({
+            id: "0",
+            txNum: 0,
+            date: new Date(),
+        });
+    }
+    if (initDailyActive === undefined) {
+        initDailyActive = new DailyActiveWallet({
+            id: "0",
+            activeWallet: 0,
+            date: new Date(),
+            cumulativeUsers: 0,
+        })
+    }
+
+    return [initDailyTx, initHourlyTx, initDailyActive];
+}
