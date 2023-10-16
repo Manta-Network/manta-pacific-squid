@@ -67,7 +67,8 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             dailyActive.activeWallet = walletSet.size;
             dailyActive.cumulativeUsers = await ctx.store.count(CumulativeWallets);
 
-            await ctx.store.upsert(dailyActive);
+            await ctx.store.upsert(dailyActive)
+            await ctx.store.upsert(hourlyTx);
         } else {
             hourlyTx.id = "0";
 
@@ -88,6 +89,9 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
 
             dailyTx.id = "0";
+            dailyActive.id = "0";
+            await ctx.store.upsert(dailyTx);
+            await ctx.store.upsert(dailyActive);
             // reset daily users
             walletSet.clear();
         } else {
