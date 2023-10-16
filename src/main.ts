@@ -54,8 +54,10 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             await ctx.store.upsert(hourlyTx);
             endHour.setTime(endHour.getTime() + (1000 * 60 * 60));
 
-            // reset daily tx number to zero
+            // reset hourly tx number to zero
             hourlyTx.txNum = 0;
+            hourlyTx.id = "0";
+            // update cumulative wallets
             await ctx.store.upsert([...walletSet.values()].map((x)=> {
                 return new CumulativeWallets({id: x})
             }));
@@ -85,6 +87,7 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             dailyTx.txNum = 0;
             endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
 
+            dailyTx.id = "0";
             // reset daily users
             walletSet.clear();
         } else {
@@ -99,8 +102,6 @@ async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyT
     let initDailyTx = await ctx.store.get(DailyTx, {where: {id: "0"}});
     let initHourlyTx = await ctx.store.get(HourlyTx, {where: {id: "0"}});
     let initDailyActive = await ctx.store.get(DailyActiveWallet, {where: {id: "0"}});
-
-    ctx.log.info(``)
 
     if (initDailyTx === undefined) {
         initDailyTx = new DailyTx({
