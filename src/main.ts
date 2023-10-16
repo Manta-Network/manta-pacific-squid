@@ -1,12 +1,75 @@
 import { DataHandlerContext } from '@subsquid/evm-processor';
 import {Store, TypeormDatabase} from '@subsquid/typeorm-store'
-import {DailyTx, HourlyTx, DailyActiveWallet,  CumulativeWallets} from './model'
+import {DailyTx, HourlyTx, DailyActiveWallet,  CumulativeWallets, ContractDailyInteraction} from './model'
 import {processor} from './processor'
+import {isZeroAddress} from './utils'
 
 let currDay: Date | undefined = undefined;
 let endHour: Date | undefined = undefined;
 let endDay: Date | undefined = undefined;
 let walletSet: Set<string> = new Set();
+const bridgeAddresses: Array<ContractAddress> = [
+    {name: "Polyhedra", addresses: ["0xCE0e4e4D2Dc0033cE2dbc35855251F4F3D086D0A"]},
+    {
+        name: "Orbiter",
+        addresses: [
+            "0x80C67432656d59144cEFf962E8fAF8926599bCF8",
+            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8",
+        ],
+    },
+    {
+        name: "LayerSwap",
+        addresses: [
+            "0x2Fc617E933a52713247CE25730f6695920B3befe",
+        ]
+    },
+    {
+        name: "Owlto",
+        addresses: [
+           "0x45A318273749d6eb00f5F6cA3bC7cD3De26D642A"
+        ]
+    },
+    {
+        name: "Meson",
+        addresses: [
+            "0x25aB3Efd52e6470681CE037cD546Dc60726948D3"
+        ]
+    },
+    {
+        name: "RhinoFi",
+        addresses: [
+            "0x2B4553122D960CA98075028d68735cC6b15DeEB5"
+        ]
+    },
+    {
+        name: "DappOS",
+        addresses: [
+            "0x1350AF2F8E74633816125962F3DB041e620C1037"
+        ]
+    },
+    {
+        name: "Native",
+        addresses: [
+            "0x4200000000000000000000000000000000000010"
+        ]
+    }
+];
+
+type ContractAddress = {
+    name: string,
+    addresses: Array<string>
+};
+
+const SupportBridges = [
+  "Polyhedra",
+  "Orbiter",
+  "LayerSwap",
+  "Owlto",
+  "Meson",
+  "RhinoFi",
+  "DappOS",
+  "Native",
+] as const;
 
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     // load current values from db
@@ -102,10 +165,11 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     }
 })
 
-async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyTx, HourlyTx, DailyActiveWallet]> {
+async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyTx, HourlyTx, DailyActiveWallet/*, Array<ContractDailyInteraction>*/]> {
     let initDailyTx = await ctx.store.get(DailyTx, {where: {id: "0"}});
     let initHourlyTx = await ctx.store.get(HourlyTx, {where: {id: "0"}});
     let initDailyActive = await ctx.store.get(DailyActiveWallet, {where: {id: "0"}});
+    const initContracts: Array<ContractDailyInteraction> = [];
 
     if (initDailyTx === undefined) {
         initDailyTx = new DailyTx({
@@ -114,7 +178,6 @@ async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyT
             date: new Date(),
         });
     }
-
     if (initHourlyTx === undefined) {
         initHourlyTx = new HourlyTx({
             id: "0",

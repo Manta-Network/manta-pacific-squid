@@ -17,6 +17,16 @@ type DailyActiveWallet @entity {
   cumulativeUsers: Int!
 }
 
-type CumulativeWallets @ entity {
+type CumulativeWallets @entity {
   id: ID!
+}
+
+type ContractDailyInteraction @entity {
+  id: ID!
+  date: DateTime! @index
+  name: String!
+  txNum: Int!
+  dailyGas: Int!
+  cumulativeTx: Int!
+  cumulativeGas: Int!
 }
