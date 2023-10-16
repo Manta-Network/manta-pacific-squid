@@ -81,10 +81,10 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
 
             await ctx.store.upsert(dailyActive)
             await ctx.store.upsert(dailyTx);
-            endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
-
             // reset daily tx number to zero
             dailyTx.txNum = 0;
+            endDay.setTime(currDay.getTime() + (1000 * 60 * 60 * 24));
+
             // reset daily users
             walletSet.clear();
         } else {
