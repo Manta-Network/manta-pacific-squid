@@ -9,48 +9,48 @@ let endHour: Date | undefined = undefined;
 let endDay: Date | undefined = undefined;
 let walletSet: Set<string> = new Set();
 const bridgeAddresses: Array<ContractAddress> = [
-    {name: "Polyhedra", addresses: ["0xCE0e4e4D2Dc0033cE2dbc35855251F4F3D086D0A"]},
+    {name: "Polyhedra", addresses: ["0xCE0e4e4D2Dc0033cE2dbc35855251F4F3D086D0A".toLowerCase()]},
     {
         name: "Orbiter",
         addresses: [
-            "0x80C67432656d59144cEFf962E8fAF8926599bCF8",
-            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8",
+            "0x80C67432656d59144cEFf962E8fAF8926599bCF8".toLowerCase(),
+            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8".toLowerCase(),
         ],
     },
     {
         name: "LayerSwap",
         addresses: [
-            "0x2Fc617E933a52713247CE25730f6695920B3befe",
+            "0x2Fc617E933a52713247CE25730f6695920B3befe".toLowerCase(),
         ]
     },
     {
         name: "Owlto",
         addresses: [
-           "0x45A318273749d6eb00f5F6cA3bC7cD3De26D642A"
+           "0x45A318273749d6eb00f5F6cA3bC7cD3De26D642A".toLowerCase()
         ]
     },
     {
         name: "Meson",
         addresses: [
-            "0x25aB3Efd52e6470681CE037cD546Dc60726948D3"
+            "0x25aB3Efd52e6470681CE037cD546Dc60726948D3".toLowerCase()
         ]
     },
     {
         name: "RhinoFi",
         addresses: [
-            "0x2B4553122D960CA98075028d68735cC6b15DeEB5"
+            "0x2B4553122D960CA98075028d68735cC6b15DeEB5".toLowerCase()
         ]
     },
     {
         name: "DappOS",
         addresses: [
-            "0x1350AF2F8E74633816125962F3DB041e620C1037"
+            "0x1350AF2F8E74633816125962F3DB041e620C1037".toLowerCase()
         ]
     },
     {
         name: "Native",
         addresses: [
-            "0x4200000000000000000000000000000000000010"
+            "0x4200000000000000000000000000000000000010".toLowerCase()
         ]
     }
 ];
@@ -71,9 +71,11 @@ const SupportBridges = [
   "Native",
 ] as const;
 
+const recordAddresses = addressHashMap(bridgeAddresses);
+
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     // load current values from db
-    const [dailyTx, hourlyTx, dailyActive]  = await init_values(ctx);
+    const [dailyTx, hourlyTx, dailyActive, contractDailyInteraction]  = await init_values(ctx);
 
     for (let c of ctx.blocks) {
         const blockDate = new Date(c.header.timestamp);
@@ -102,6 +104,13 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
         dailyTx.date.setTime(endDay.getTime());
         hourlyTx.date.setTime(endHour.getTime());
         dailyActive.date.setTime(endDay.getTime());
+        for (const name in contractDailyInteraction) {
+            const contractInteraction = contractDailyInteraction[name]
+            if (contractInteraction) {
+                contractInteraction.date.setTime(endDay.getTime());
+                contractDailyInteraction[name] = contractInteraction;
+            }
+        }
 
         for (let tx of c.transactions) {
             // increment daily tx
@@ -109,6 +118,14 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             // increment hourly tx
             hourlyTx.txNum++;
             walletSet.add(tx.from);
+            if (tx.to) {
+                const contractName = recordAddresses[tx.to];
+                let contractTx = contractDailyInteraction[contractName];
+                if (contractTx) {
+                    contractTx.txNum++;
+                    contractDailyInteraction[contractName] = contractTx;
+                }
+            }
         }
 
         if (currDay > endHour) {
@@ -144,6 +161,19 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             dailyActive.id = c.header.id;
             dailyActive.activeWallet = walletSet.size;
             dailyActive.cumulativeUsers = await ctx.store.count(CumulativeWallets);
+            for (const name in contractDailyInteraction) {
+                const contractInteraction = contractDailyInteraction[name];
+                if (contractInteraction) {
+                    contractInteraction.id = contractInteraction.name + c.header.id;
+                    contractInteraction.cumulativeTx += contractInteraction.txNum;
+                    ctx.log.info(`name: ${contractInteraction.name}, txNum: ${contractInteraction.txNum}`);
+                    await ctx.store.upsert(contractInteraction);
+                    contractInteraction.txNum = 0;
+                    contractInteraction.id = contractInteraction.name + "0";
+                    await ctx.store.upsert(contractInteraction);
+                    contractDailyInteraction[name] = contractInteraction;
+                }
+            }
 
             await ctx.store.upsert(dailyActive)
             await ctx.store.upsert(dailyTx);
@@ -161,15 +191,40 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             dailyTx.id = "0";
 
             await ctx.store.upsert(dailyTx);
+
+            for (const name in contractDailyInteraction) {
+                const contractInteraction = contractDailyInteraction[name]
+                if (contractInteraction) {
+                    contractInteraction.id = contractInteraction.name + "0";
+                    await ctx.store.upsert(contractInteraction);
+                    contractDailyInteraction[name] = contractInteraction;
+                }
+            }
         }
     }
 })
 
-async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyTx, HourlyTx, DailyActiveWallet/*, Array<ContractDailyInteraction>*/]> {
+async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyTx, HourlyTx, DailyActiveWallet, Record<string, ContractDailyInteraction>]> {
     let initDailyTx = await ctx.store.get(DailyTx, {where: {id: "0"}});
     let initHourlyTx = await ctx.store.get(HourlyTx, {where: {id: "0"}});
     let initDailyActive = await ctx.store.get(DailyActiveWallet, {where: {id: "0"}});
-    const initContracts: Array<ContractDailyInteraction> = [];
+    const initContracts: Record<string, ContractDailyInteraction> = {};
+
+    for (const contract of bridgeAddresses) {
+        let initContract = await ctx.store.get(ContractDailyInteraction, {where: {id: contract.name + "0"}});
+        if (initContract === undefined) {
+            initContract = new ContractDailyInteraction({
+                id: contract.name + "0",
+                name: contract.name,
+                date: new Date(),
+                txNum: 0,
+                dailyGas: 0,
+                cumulativeTx: 0,
+                cumulativeGas: 0,
+            });
+        }
+        initContracts[contract.name] = initContract;
+    }
 
     if (initDailyTx === undefined) {
         initDailyTx = new DailyTx({
@@ -194,5 +249,15 @@ async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyT
         })
     }
 
-    return [initDailyTx, initHourlyTx, initDailyActive];
+    return [initDailyTx, initHourlyTx, initDailyActive, initContracts];
+}
+
+function addressHashMap(contractArray: Array<ContractAddress>): Record<string, string> {
+    const addressRecord = {} as Record<string, string>;
+    contractArray.forEach((contract) => {
+        contract.addresses.forEach((addr) => {
+            addressRecord[addr] = contract.name
+        })
+    })
+    return addressRecord;
 }
