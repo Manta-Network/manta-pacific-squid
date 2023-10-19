@@ -1,4 +1,5 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, Index as Index_} from "typeorm"
+import * as marshal from "./marshal"
 
 @Entity_()
 export class ContractDailyInteraction {
@@ -19,12 +20,12 @@ export class ContractDailyInteraction {
     @Column_("int4", {nullable: false})
     txNum!: number
 
-    @Column_("int4", {nullable: false})
-    dailyGas!: number
+    @Column_("numeric", {transformer: marshal.bigintTransformer, nullable: false})
+    dailyGas!: bigint
 
     @Column_("int4", {nullable: false})
     cumulativeTx!: number
 
-    @Column_("int4", {nullable: false})
-    cumulativeGas!: number
+    @Column_("numeric", {transformer: marshal.bigintTransformer, nullable: false})
+    cumulativeGas!: bigint
 }

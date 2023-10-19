@@ -13,6 +13,7 @@ const bridgeAddresses: Array<ContractAddress> = [
     {
         name: "Orbiter",
         addresses: [
+            "0x13E46b2a3f8512eD4682a8Fb8B560589fE3C2172".toLowerCase(),
             "0x80C67432656d59144cEFf962E8fAF8926599bCF8".toLowerCase(),
             "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8".toLowerCase(),
         ],
@@ -55,6 +56,68 @@ const bridgeAddresses: Array<ContractAddress> = [
     }
 ];
 
+const socialAddresses: Array<ContractAddress> = [
+    {
+        name: "POMP",
+        addresses: [
+            '0xa44155ffbcE68C9C848f8Ea6F28C40311085125E'.toLowerCase()
+        ]
+    },
+    {
+        name: "Moonfit",
+        addresses: [
+            '0x8D8F5B2c76a8a7e1Bc882a46a71133458132E8AC'.toLowerCase()
+        ]
+    },
+    {
+        name: "Metale",
+        addresses: [
+            '0xe9eB224a6349775ab41567D996A748a032DB57f3'.toLowerCase()
+        ]
+    },
+    {
+        name: "Dmail",
+        addresses: [
+            '0xC0b920c31c1D9047D043b201e6b3956eDb1A0374'.toLowerCase()
+        ]
+    },
+    {
+        name: "Omnisea",
+        addresses: [
+            '0x46Ce46951D12710d85bc4FE10BB29c6Ea5012077'.toLowerCase()
+        ]
+    }
+]
+
+const swapAddresses: Array<ContractAddress> = [
+    {
+        name: "Aperture",
+        addresses: [
+            "0x3488d5A2D0281f546e43435715C436b46Ec1C678".toLowerCase()
+        ]
+    },
+    {
+        name: "iZUMI",
+        addresses: [
+            "0x3EF68D3f7664b2805D4E88381b64868a56f88bC4".toLowerCase()
+        ]
+    },
+    {
+        name: "PacificSwap",
+        addresses: [
+            "0x632c8519D9CDd3b36CF7cf391CD9C437564bAE6a".toLowerCase()
+        ]
+    },
+    {
+        name: "OpenOcean",
+        addresses: [
+            "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64".toLowerCase()
+        ]
+    }
+]
+
+const allContracts = bridgeAddresses.concat(socialAddresses, swapAddresses);
+
 type ContractAddress = {
     name: string,
     addresses: Array<string>
@@ -71,7 +134,7 @@ const SupportBridges = [
   "Native",
 ] as const;
 
-const recordAddresses = addressHashMap(bridgeAddresses);
+const recordAddresses = addressHashMap(allContracts);
 
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     // load current values from db
@@ -123,6 +186,7 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
                 let contractTx = contractDailyInteraction[contractName];
                 if (contractTx) {
                     contractTx.txNum++;
+                    contractTx.dailyGas += tx.gas;
                     contractDailyInteraction[contractName] = contractTx;
                 }
             }
@@ -166,9 +230,11 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
                 if (contractInteraction) {
                     contractInteraction.id = contractInteraction.name + c.header.id;
                     contractInteraction.cumulativeTx += contractInteraction.txNum;
+                    contractInteraction.cumulativeGas += contractInteraction.dailyGas;
                     ctx.log.info(`name: ${contractInteraction.name}, txNum: ${contractInteraction.txNum}`);
                     await ctx.store.upsert(contractInteraction);
                     contractInteraction.txNum = 0;
+                    contractInteraction.dailyGas = 0n;
                     contractInteraction.id = contractInteraction.name + "0";
                     await ctx.store.upsert(contractInteraction);
                     contractDailyInteraction[name] = contractInteraction;
@@ -210,7 +276,7 @@ async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyT
     let initDailyActive = await ctx.store.get(DailyActiveWallet, {where: {id: "0"}});
     const initContracts: Record<string, ContractDailyInteraction> = {};
 
-    for (const contract of bridgeAddresses) {
+    for (const contract of allContracts) {
         let initContract = await ctx.store.get(ContractDailyInteraction, {where: {id: contract.name + "0"}});
         if (initContract === undefined) {
             initContract = new ContractDailyInteraction({
@@ -218,9 +284,9 @@ async function init_values(ctx: DataHandlerContext<Store, any>): Promise<[DailyT
                 name: contract.name,
                 date: new Date(),
                 txNum: 0,
-                dailyGas: 0,
+                dailyGas: 0n,
                 cumulativeTx: 0,
-                cumulativeGas: 0,
+                cumulativeGas: 0n,
             });
         }
         initContracts[contract.name] = initContract;
