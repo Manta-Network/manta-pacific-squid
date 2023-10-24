@@ -2,13 +2,15 @@ import { DataHandlerContext } from '@subsquid/evm-processor';
 import {Store, TypeormDatabase} from '@subsquid/typeorm-store'
 import {DailyTx, HourlyTx, DailyActiveWallet,  CumulativeWallets, ContractDailyInteraction} from './model'
 import {processor} from './processor'
-import {isZeroAddress} from './utils'
+import { bridgeEventAddresses, bridgeTopics } from './bridges'
 
 let currDay: Date | undefined = undefined;
 let endHour: Date | undefined = undefined;
 let endDay: Date | undefined = undefined;
 let walletSet: Set<string> = new Set();
-const bridgeAddresses: Array<ContractAddress> = [
+
+// for tracking using events, this is more ideal
+const bridgeEventAddressses: Array<ContractAddress> = [
     {name: "Polyhedra", addresses: ["0xCE0e4e4D2Dc0033cE2dbc35855251F4F3D086D0A".toLowerCase()]},
     {
         name: "Orbiter",
@@ -18,6 +20,28 @@ const bridgeAddresses: Array<ContractAddress> = [
             "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8".toLowerCase(),
         ],
     },
+    {
+        name: "RhinoFi",
+        addresses: [
+            "0x2B4553122D960CA98075028d68735cC6b15DeEB5".toLowerCase()
+        ]
+    },
+    {
+        name: "DappOS",
+        addresses: [
+            "0x1350AF2F8E74633816125962F3DB041e620C1037".toLowerCase()
+        ]
+    },
+    {
+        name: "Native",
+        addresses: [
+            "0x4200000000000000000000000000000000000010".toLowerCase()
+        ]
+    }
+];
+
+// for tracking tx, other bridges use event logs
+const bridgeAddresses: Array<ContractAddress> = [
     {
         name: "LayerSwap",
         addresses: [
@@ -37,21 +61,9 @@ const bridgeAddresses: Array<ContractAddress> = [
         ]
     },
     {
-        name: "RhinoFi",
+        name: "miniBridge",
         addresses: [
-            "0x2B4553122D960CA98075028d68735cC6b15DeEB5".toLowerCase()
-        ]
-    },
-    {
-        name: "DappOS",
-        addresses: [
-            "0x1350AF2F8E74633816125962F3DB041e620C1037".toLowerCase()
-        ]
-    },
-    {
-        name: "Native",
-        addresses: [
-            "0x4200000000000000000000000000000000000010".toLowerCase()
+            "0x00000000000007736e2F9aA5630B8c812E1F3fc9".toLowerCase()
         ]
     }
 ];
@@ -114,9 +126,17 @@ const swapAddresses: Array<ContractAddress> = [
             "0x6352a56caadC4F1E25CD6c75970Fa768A3304e64".toLowerCase()
         ]
     }
+    {
+        name: "Rivera Money",
+        addresses: [
+            "0x0DB2BA00bCcf4F5e20b950bF954CAdF768D158Aa".toLowerCase()
+        ]
+    }
 ]
 
-const allContracts = bridgeAddresses.concat(socialAddresses, swapAddresses);
+const txContracts = bridgeAddresses.concat(socialAddresses, swapAddresses);
+const eventContracts = bridgeEventAddressses;
+const allContracts = txContracts.concat(eventContracts);
 
 type ContractAddress = {
     name: string,
@@ -134,7 +154,10 @@ const SupportBridges = [
   "Native",
 ] as const;
 
-const recordAddresses = addressHashMap(allContracts);
+// contracts being tracked using txs
+const recordTxAddresses = addressHashMap(txContracts);
+
+const recordEventAddresses = addressHashMap(eventContracts);
 
 processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
     // load current values from db
@@ -175,6 +198,20 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             }
         }
 
+        for (let log of c.logs) {
+            if (log) {
+                const contractName = recordEventAddresses[log.address];
+                const contractEvent = contractDailyInteraction[contractName];
+                if (contractEvent) {
+                    contractEvent.txNum++;
+                    if (log.transaction) {
+                        contractEvent.dailyGas += log.transaction.gas;
+                    }
+                    contractDailyInteraction[contractName] = contractEvent;
+                }
+            }
+        }
+
         for (let tx of c.transactions) {
             // increment daily tx
             dailyTx.txNum++;
@@ -182,7 +219,7 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             hourlyTx.txNum++;
             walletSet.add(tx.from);
             if (tx.to) {
-                const contractName = recordAddresses[tx.to];
+                const contractName = recordTxAddresses[tx.to];
                 let contractTx = contractDailyInteraction[contractName];
                 if (contractTx) {
                     contractTx.txNum++;

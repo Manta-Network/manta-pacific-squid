@@ -6,6 +6,8 @@ import {
     Log as _Log,
     Transaction as _Transaction,
 } from '@subsquid/evm-processor'
+import { bridgeEventAddresses, bridgeTopics } from './bridges'
+
 
 export const processor = new EvmBatchProcessor()
     .setDataSource({
@@ -14,6 +16,11 @@ export const processor = new EvmBatchProcessor()
         chain: 'https://pacific-rpc.manta.network/http',
     })
     .setFinalityConfirmation(75)
+    .addLog({
+        address: bridgeEventAddresses,
+        topic0: bridgeTopics,
+        transaction: true,
+    })
     .setFields({
         transaction: {
             from: true,
