@@ -2,7 +2,6 @@ import { DataHandlerContext } from '@subsquid/evm-processor';
 import {Store, TypeormDatabase} from '@subsquid/typeorm-store'
 import {DailyTx, HourlyTx, DailyActiveWallet,  CumulativeWallets, ContractDailyInteraction} from './model'
 import {processor} from './processor'
-import { bridgeEventAddresses, bridgeTopics } from './bridges'
 
 let currDay: Date | undefined = undefined;
 let endHour: Date | undefined = undefined;
@@ -16,8 +15,6 @@ const bridgeEventAddressses: Array<ContractAddress> = [
         name: "Orbiter",
         addresses: [
             "0x13E46b2a3f8512eD4682a8Fb8B560589fE3C2172".toLowerCase(),
-            "0x80C67432656d59144cEFf962E8fAF8926599bCF8".toLowerCase(),
-            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8".toLowerCase(),
         ],
     },
     {
@@ -42,6 +39,13 @@ const bridgeEventAddressses: Array<ContractAddress> = [
 
 // for tracking tx, other bridges use event logs
 const bridgeAddresses: Array<ContractAddress> = [
+    {
+        name: "Orbiter",
+        addresses: [
+            "0x80C67432656d59144cEFf962E8fAF8926599bCF8",
+            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8",
+        ]
+    },
     {
         name: "LayerSwap",
         addresses: [
@@ -218,6 +222,15 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx) => {
             // increment hourly tx
             hourlyTx.txNum++;
             walletSet.add(tx.from);
+
+            const contractName = recordTxAddresses[tx.from];
+            let contractTx = contractDailyInteraction[contractName];
+            if (contractTx) {
+                contractTx.txNum++;
+                contractTx.dailyGas += tx.gas;
+                contractDailyInteraction[contractName] = contractTx;
+            }
+
             if (tx.to) {
                 const contractName = recordTxAddresses[tx.to];
                 let contractTx = contractDailyInteraction[contractName];
