@@ -42,8 +42,8 @@ const bridgeAddresses: Array<ContractAddress> = [
     {
         name: "Orbiter",
         addresses: [
-            "0x80C67432656d59144cEFf962E8fAF8926599bCF8",
-            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8",
+            "0x80C67432656d59144cEFf962E8fAF8926599bCF8".toLowerCase(),
+            "0xE4eDb277e41dc89aB076a1F049f4a3EfA700bCE8".toLowerCase(),
         ]
     },
     {
